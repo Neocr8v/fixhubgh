@@ -19,7 +19,7 @@ export default function AdminDashboard() {
   const searchParams = useSearchParams();
   const search = searchParams.get('search') ?? '';
   const [view, setView] = useState('overview');
-  const [issues, setIssues] = useState<IssueListItem[] | null>(null);
+  const [issues, setIssues] = useState<IssueListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -47,7 +47,7 @@ export default function AdminDashboard() {
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <MetricCard label="Search" value={search ? 'Active' : 'Idle'} detail={search ? `Filtering by “${search}”` : 'Use the top search bar.'} />
-          <MetricCard label="Tickets" value={issues === null ? 'Loading…' : issues.length.toString()} detail="Current ticket list" />
+          <MetricCard label="Tickets" value={loading ? 'Loading…' : issues.length.toString()} detail="Current ticket list" />
           <MetricCard label="View" value={view === 'overview' ? 'Analytics' : 'Tickets'} detail="Switch views above" />
         </div>
       </div>

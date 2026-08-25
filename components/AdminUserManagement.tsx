@@ -72,7 +72,7 @@ export default function AdminUserManagement() {
       return;
     }
 
-    setNewUser({ name: '', email: '', role: 'technician', room: '', specialty: '', password: '' });
+    setNewUser({ name: '', email: '', role: 'technician', hostel: '', room: '', specialty: '', password: '' });
     loadUsers();
   }
 

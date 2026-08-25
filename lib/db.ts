@@ -18,6 +18,7 @@ declare global {
 function createConnection() {
   const conn = new DatabaseSync(DB_PATH);
   conn.exec('PRAGMA journal_mode = WAL;');
+  conn.exec('PRAGMA busy_timeout = 5000;');
   return conn;
 }
 
