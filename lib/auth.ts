@@ -37,12 +37,12 @@ export function clearSessionCookie() {
   cookies().set(COOKIE_NAME, '', { path: '/', maxAge: 0 });
 }
 
-export function getCurrentUser(): SessionUser | null {
+export async function getCurrentUser(): Promise<SessionUser | null> {
   const token = cookies().get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
     const decoded = jwt.verify(token, SECRET) as SessionUser;
-    const fresh = getUserById(decoded.id);
+    const fresh = await getUserById(decoded.id);
     if (!fresh || fresh.is_active !== 1) return null;
     return toSessionUser(fresh);
   } catch {
@@ -66,22 +66,22 @@ export function toSessionUser(row: UserRow): SessionUser {
   };
 }
 
-export function requireUser(): SessionUser {
-  const user = getCurrentUser();
+export async function requireUser(): Promise<SessionUser> {
+  const user = await getCurrentUser();
   if (!user) throw new Error('UNAUTHENTICATED');
   return user;
 }
 
-export function getUserByEmail(email: string): UserRow | undefined {
-  return db.prepare('SELECT * FROM users WHERE email = ?').get(email) as unknown as UserRow | undefined;
+export async function getUserByEmail(email: string): Promise<UserRow | undefined> {
+  return (await db.prepare('SELECT * FROM users WHERE email = ?').get(email)) as unknown as UserRow | undefined;
 }
 
-export function getUserById(id: string): UserRow | undefined {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as unknown as UserRow | undefined;
+export async function getUserById(id: string): Promise<UserRow | undefined> {
+  return (await db.prepare('SELECT * FROM users WHERE id = ?').get(id)) as unknown as UserRow | undefined;
 }
 
-export function getActiveTechnicians(): UserRow[] {
-  return db
+export async function getActiveTechnicians(): Promise<UserRow[]> {
+  return (await db
     .prepare('SELECT * FROM users WHERE role = ? AND is_active = 1 ORDER BY name ASC')
-    .all('technician') as unknown as UserRow[];
+    .all('technician')) as unknown as UserRow[];
 }
