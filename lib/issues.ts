@@ -19,8 +19,8 @@ export function detectPriority(title: string, description: string): 'urgent' | '
   return 'normal';
 }
 
-export function nextTicketNumber(): string {
-  const rows = db.prepare('SELECT ticket_no FROM issues').all() as unknown as { ticket_no: string }[];
+export async function nextTicketNumber(): Promise<string> {
+  const rows = (await db.prepare('SELECT ticket_no FROM issues').all()) as unknown as { ticket_no: string }[];
   let max = 0;
   for (const r of rows) {
     const match = r.ticket_no.match(/(\d+)$/);
@@ -34,12 +34,17 @@ export function nextTicketNumber(): string {
  * with meaningfully overlapping wording, signalling a hostel-wide problem
  * (e.g. many students reporting the same broken water main).
  */
-export function findPotentialDuplicates(room: string, category: string, title: string, excludeId?: string): IssueRow[] {
-  const candidates = db
+export async function findPotentialDuplicates(
+  room: string,
+  category: string,
+  title: string,
+  excludeId?: string
+): Promise<IssueRow[]> {
+  const candidates = (await db
     .prepare(
       `SELECT * FROM issues WHERE category = ? AND status != 'resolved' AND id != COALESCE(?, '') ORDER BY created_at DESC LIMIT 25`
     )
-    .all(category, excludeId ?? null) as unknown as IssueRow[];
+    .all(category, excludeId ?? null)) as unknown as IssueRow[];
 
   const titleWords = new Set(
     title.toLowerCase().split(/\W+/).filter((w) => w.length > 3)

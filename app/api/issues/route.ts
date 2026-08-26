@@ -6,7 +6,7 @@ import { detectPriority, nextTicketNumber, findPotentialDuplicates, CATEGORIES }
 import { sendEmail } from '@/lib/mail';
 
 export async function GET(req: NextRequest) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -43,26 +43,28 @@ export async function GET(req: NextRequest) {
 
   query += ' ORDER BY created_at DESC';
 
-  const issues = db.prepare(query).all(...params) as unknown as IssueRow[];
+  const issues = (await db.prepare(query).all(...params)) as unknown as IssueRow[];
 
   // attach student / technician names for display
-  const enriched = issues.map((issue) => {
-    const student = db.prepare('SELECT name, room FROM users WHERE id = ?').get(issue.student_id) as
-      | { name: string; room: string }
-      | undefined;
-    const technician = issue.technician_id
-      ? (db.prepare('SELECT name, specialty FROM users WHERE id = ?').get(issue.technician_id) as
-          | { name: string; specialty: string }
-          | undefined)
-      : null;
-    return { ...issue, student_name: student?.name ?? 'Unknown', technician_name: technician?.name ?? null };
-  });
+  const enriched = await Promise.all(
+    issues.map(async (issue) => {
+      const student = (await db.prepare('SELECT name, room FROM users WHERE id = ?').get(issue.student_id)) as
+        | { name: string; room: string }
+        | undefined;
+      const technician = issue.technician_id
+        ? ((await db.prepare('SELECT name, specialty FROM users WHERE id = ?').get(issue.technician_id)) as
+            | { name: string; specialty: string }
+            | undefined)
+        : null;
+      return { ...issue, student_name: student?.name ?? 'Unknown', technician_name: technician?.name ?? null };
+    })
+  );
 
   return NextResponse.json({ issues: enriched });
 }
 
 export async function POST(req: NextRequest) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   if (user.role !== 'student') {
     return NextResponse.json({ error: 'Only students can report issues.' }, { status: 403 });
@@ -86,24 +88,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Image is too large. Please use a smaller photo.' }, { status: 400 });
   }
 
-  const duplicates = findPotentialDuplicates(room, category, title);
+  const duplicates = await findPotentialDuplicates(room, category, title);
   const priority = detectPriority(title, description);
   const id = `i_${nanoid(10)}`;
-  const ticketNo = nextTicketNumber();
+  const ticketNo = await nextTicketNumber();
 
-  db.prepare(
-    `INSERT INTO issues (id, ticket_no, title, description, category, priority, status, room, hostel, image_data, student_id, duplicate_of)
-     VALUES (?, ?, ?, ?, ?, ?, 'reported', ?, ?, ?, ?, ?)`
-  ).run(id, ticketNo, title, description, category, priority, room, hostel, imageData, user.id, duplicates[0]?.id ?? null);
+  await db
+    .prepare(
+      `INSERT INTO issues (id, ticket_no, title, description, category, priority, status, room, hostel, image_data, student_id, duplicate_of)
+       VALUES (?, ?, ?, ?, ?, ?, 'reported', ?, ?, ?, ?, ?)`
+    )
+    .run(id, ticketNo, title, description, category, priority, room, hostel, imageData, user.id, duplicates[0]?.id ?? null);
 
-  db.prepare(`INSERT INTO updates (id, issue_id, actor_id, message) VALUES (?, ?, ?, ?)`).run(
-    `up_${nanoid(10)}`,
-    id,
-    user.id,
-    'Issue reported by student.'
-  );
+  await db
+    .prepare(`INSERT INTO updates (id, issue_id, actor_id, message) VALUES (?, ?, ?, ?)`)
+    .run(`up_${nanoid(10)}`, id, user.id, 'Issue reported by student.');
 
-  const created = db.prepare('SELECT * FROM issues WHERE id = ?').get(id) as unknown as IssueRow;
+  const created = (await db.prepare('SELECT * FROM issues WHERE id = ?').get(id)) as unknown as IssueRow;
 
   if (user.email) {
     const subject = `HostelCare: Issue reported ${ticketNo}`;

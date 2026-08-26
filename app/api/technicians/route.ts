@@ -3,10 +3,10 @@ import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const technicians = db
+  const technicians = await db
     .prepare(
       `SELECT t.id, t.name, t.specialty,
         (SELECT COUNT(*) FROM issues i WHERE i.technician_id = t.id AND i.status != 'resolved') as active_count
