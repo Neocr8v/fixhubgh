@@ -4,20 +4,19 @@ import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-
-  const fresh = db.prepare('SELECT id, name, email, role, room, hostel, specialty, avatar_url, phone, bio, is_active, created_at FROM users WHERE id = ?').get(user.id);
+  const fresh = await db
+    .prepare('SELECT id, name, email, role, room, hostel, specialty, avatar_url, phone, bio, is_active, created_at FROM users WHERE id = ?')
+    .get(user.id);
   return NextResponse.json({ user: fresh });
 }
 
 export async function PATCH(req: NextRequest) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
-
   const name = body.name?.trim();
   const email = body.email?.toLowerCase()?.trim();
   const room = body.room?.trim() || null;
@@ -27,19 +26,17 @@ export async function PATCH(req: NextRequest) {
   const phone = body.phone?.trim() || null;
   const bio = body.bio?.trim() || null;
   const password = body.password?.trim();
-
   if (!name || !email) {
     return NextResponse.json({ error: 'Name and email are required.' }, { status: 400 });
   }
-
-  const emailOwner = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  const emailOwner = (await db.prepare('SELECT id FROM users WHERE email = ?').get(email)) as
+    | { id: string }
+    | undefined;
   if (emailOwner && emailOwner.id !== user.id) {
     return NextResponse.json({ error: 'That email is already taken.' }, { status: 409 });
   }
-
   const updates: string[] = [];
   const params: any[] = [];
-
   updates.push('name = ?');
   params.push(name);
   updates.push('email = ?');
@@ -56,7 +53,6 @@ export async function PATCH(req: NextRequest) {
   params.push(phone);
   updates.push('bio = ?');
   params.push(bio);
-
   if (password) {
     if (password.length < 6) {
       return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
@@ -64,10 +60,10 @@ export async function PATCH(req: NextRequest) {
     updates.push('password_hash = ?');
     params.push(bcrypt.hashSync(password, 10));
   }
-
   params.push(user.id);
-  db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
-
-  const fresh = db.prepare('SELECT id, name, email, role, room, hostel, specialty, avatar_url, phone, bio, is_active, created_at FROM users WHERE id = ?').get(user.id);
+  await db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  const fresh = await db
+    .prepare('SELECT id, name, email, role, room, hostel, specialty, avatar_url, phone, bio, is_active, created_at FROM users WHERE id = ?')
+    .get(user.id);
   return NextResponse.json({ ok: true, user: fresh });
 }
