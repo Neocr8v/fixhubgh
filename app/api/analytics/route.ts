@@ -27,22 +27,22 @@ export async function GET(req: Request) {
     const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
     const resolvedWhereSql = whereClauses.length ? `${whereSql} AND resolved_at IS NOT NULL` : 'WHERE resolved_at IS NOT NULL';
 
-    const byCategory = db
+    const byCategory = await db
       .prepare(`SELECT category, COUNT(*) as count FROM issues ${whereSql} GROUP BY category ORDER BY count DESC`)
       .all(...params);
 
-    const byStatus = db.prepare(`SELECT status, COUNT(*) as count FROM issues ${whereSql} GROUP BY status`).all(...params);
+    const byStatus = await db.prepare(`SELECT status, COUNT(*) as count FROM issues ${whereSql} GROUP BY status`).all(...params);
 
-    const byPriority = db.prepare(`SELECT priority, COUNT(*) as count FROM issues ${whereSql} GROUP BY priority`).all(...params);
+    const byPriority = await db.prepare(`SELECT priority, COUNT(*) as count FROM issues ${whereSql} GROUP BY priority`).all(...params);
 
-    const totalsRow = db
+    const totalsRow = (await db
       .prepare(
         `SELECT COUNT(*) as total,
           SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved,
           SUM(CASE WHEN duplicate_of IS NOT NULL THEN 1 ELSE 0 END) as duplicates
          FROM issues ${whereSql}`
       )
-      .get(...params) as unknown as { total: number; resolved: number | null; duplicates: number | null };
+      .get(...params)) as unknown as { total: number; resolved: number | null; duplicates: number | null };
 
     const totals = {
       total: totalsRow.total ?? 0,
@@ -50,14 +50,14 @@ export async function GET(req: Request) {
       duplicates: totalsRow.duplicates ?? 0,
     };
 
-    const avgResolutionRow = db
+    const avgResolutionRow = (await db
       .prepare(
         `SELECT AVG(julianday(resolved_at) - julianday(created_at)) as avg_days
          FROM issues ${resolvedWhereSql}`
       )
-      .get(...params) as unknown as { avg_days: number | null };
+      .get(...params)) as unknown as { avg_days: number | null };
 
-    const trend = db
+    const trend = await db
       .prepare(
         `SELECT date(created_at) as day, COUNT(*) as count
          FROM issues
@@ -66,14 +66,14 @@ export async function GET(req: Request) {
       )
       .all(...params);
 
-    const byRoom = db
+    const byRoom = await db
       .prepare(`SELECT room, COUNT(*) as count FROM issues ${whereSql} GROUP BY room ORDER BY count DESC LIMIT 8`)
       .all(...params);
 
     const technicianDateClauses = whereClauses.map((clause) => clause.replace(/date\(created_at\)/g, 'date(i.created_at)'));
     const technicianWhere = `WHERE u.role = 'technician'${technicianDateClauses.length ? ` AND ${technicianDateClauses.join(' AND ')}` : ''}`;
 
-    const technicianLoad = db
+    const technicianLoad = await db
       .prepare(
         `SELECT u.name, COUNT(i.id) as active
          FROM users u

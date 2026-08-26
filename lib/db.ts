@@ -27,6 +27,13 @@ function createConnection() {
 function normalizeSql(sql: string) {
   return sql
     .replace(/datetime\(\s*['"]now['"]\s*\)/gi, 'NOW()')
+    // julianday(a) - julianday(b)  ->  days between two timestamps
+    .replace(
+      /julianday\(([^()]+)\)\s*-\s*julianday\(([^()]+)\)/gi,
+      '(EXTRACT(EPOCH FROM (($1)::timestamptz - ($2)::timestamptz)) / 86400)'
+    )
+    // date(x)  ->  x cast to a date
+    .replace(/date\(([^()]+)\)/gi, '(($1)::date)')
     .replace(/\?/g, (match, offset, full) => {
       const q = full.slice(0, offset);
       const count = (q.match(/\?/g) ?? []).length;

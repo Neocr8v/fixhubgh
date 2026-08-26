@@ -18,15 +18,18 @@ export async function POST(req: NextRequest) {
   if (password.length < 6) {
     return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
   }
-  if (getUserByEmail(email)) {
+
+  if (await getUserByEmail(email)) {
     return NextResponse.json({ error: 'An account with that email already exists.' }, { status: 409 });
   }
 
   const id = `u_${nanoid(10)}`;
   const hash = bcrypt.hashSync(password, 10);
-  db.prepare(
-    `INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty, is_active) VALUES (?, ?, ?, ?, 'student', ?, ?, NULL, 1)`
-  ).run(id, name, email, hash, room, hostel);
+  await db
+    .prepare(
+      `INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty, is_active) VALUES (?, ?, ?, ?, 'student', ?, ?, NULL, 1)`
+    )
+    .run(id, name, email, hash, room, hostel);
 
   const sessionUser = toSessionUser({
     id,
