@@ -132,10 +132,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const student = await getUserById(updated.student_id);
   const technician = updated.technician_id ? await getUserById(updated.technician_id) : undefined;
-  const subject = `HostelCare: Update for ${updated.ticket_no}`;
+  const subject = `FixHub: Update for ${updated.ticket_no}`;
   const changeSummary = messages.join(' ');
-  const text = `Hello ${student?.name ?? 'Student'},\n\nThere is an update on your issue ${updated.ticket_no}:\n\n${changeSummary}\n\nTitle: ${updated.title}\nStatus: ${updated.status.replace('_', ' ')}\nRoom: ${updated.room} (${updated.hostel})\n\nVisit the portal to see the latest details.\n\nBest,\nHostelCare Team`;
-  const html = `<p>Hello ${student?.name ?? 'Student'},</p><p>There is an update on your issue <strong>${updated.ticket_no}</strong>:</p><p>${changeSummary}</p><p><strong>Title:</strong> ${updated.title}<br/><strong>Status:</strong> ${updated.status.replace('_', ' ')}<br/><strong>Room:</strong> ${updated.room} (${updated.hostel})</p><p>Visit the portal to see the latest details.</p><p>Best,<br/>HostelCare Team</p>`;
+  const text = `Hello ${student?.name ?? 'Student'},\n\nThere is an update on your issue ${updated.ticket_no}:\n\n${changeSummary}\n\nTitle: ${updated.title}\nStatus: ${updated.status.replace('_', ' ')}\nRoom: ${updated.room} (${updated.hostel})\n\nVisit the portal to see the latest details.\n\nBest,\nFixHub Team`;
+  const html = `<p>Hello ${student?.name ?? 'Student'},</p><p>There is an update on your issue <strong>${updated.ticket_no}</strong>:</p><p>${changeSummary}</p><p><strong>Title:</strong> ${updated.title}<br/><strong>Status:</strong> ${updated.status.replace('_', ' ')}<br/><strong>Room:</strong> ${updated.room} (${updated.hostel})</p><p>Visit the portal to see the latest details.</p><p>Best,<br/>FixHub Team</p>`;
 
   if (student?.email) {
     void sendEmail({ to: student.email, subject, text, html }).catch((error) => {
@@ -144,8 +144,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   if (technician?.email && (technicianId !== undefined || status !== undefined)) {
-    const techText = `Hello ${technician.name},\n\nA ticket has been updated that you are assigned to or need to know about:\n\n${changeSummary}\n\nTicket: ${updated.ticket_no}\nTitle: ${updated.title}\nStatus: ${updated.status.replace('_', ' ')}\nRoom: ${updated.room} (${updated.hostel})\n\nView the ticket for more details.\n\nBest,\nHostelCare Team`;
-    const techHtml = `<p>Hello ${technician.name},</p><p>A ticket has been updated that you are assigned to or need to know about:</p><p>${changeSummary}</p><p><strong>Ticket:</strong> ${updated.ticket_no}<br/><strong>Title:</strong> ${updated.title}<br/><strong>Status:</strong> ${updated.status.replace('_', ' ')}<br/><strong>Room:</strong> ${updated.room} (${updated.hostel})</p><p>View the ticket for more details.</p><p>Best,<br/>HostelCare Team</p>`;
+    const techText = `Hello ${technician.name},\n\nA ticket has been updated that you are assigned to or need to know about:\n\n${changeSummary}\n\nTicket: ${updated.ticket_no}\nTitle: ${updated.title}\nStatus: ${updated.status.replace('_', ' ')}\nRoom: ${updated.room} (${updated.hostel})\n\nView the ticket for more details.\n\nBest,\nFixHub Team`;
+    const techHtml = `<p>Hello ${technician.name},</p><p>A ticket has been updated that you are assigned to or need to know about:</p><p>${changeSummary}</p><p><strong>Ticket:</strong> ${updated.ticket_no}<br/><strong>Title:</strong> ${updated.title}<br/><strong>Status:</strong> ${updated.status.replace('_', ' ')}<br/><strong>Room:</strong> ${updated.room} (${updated.hostel})</p><p>View the ticket for more details.</p><p>Best,<br/>FixHub Team</p>`;
     void sendEmail({ to: technician.email, subject, text: techText, html: techHtml }).catch((error) => {
       console.error('Failed to send update email to technician:', error);
     });

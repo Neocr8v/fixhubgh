@@ -4,7 +4,7 @@ const SMTP_HOST = process.env.SMTP_HOST ?? '';
 const SMTP_PORT = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 0;
 const SMTP_USER = process.env.SMTP_USER ?? '';
 const SMTP_PASS = process.env.SMTP_PASS ?? '';
-const EMAIL_FROM = process.env.EMAIL_FROM ?? 'HostelCare <noreply@hostelcare.local>';
+const EMAIL_FROM = process.env.EMAIL_FROM ?? 'FixHub <noreply@fixhub.local>';
 
 const emailConfigured = Boolean(SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS);
 
@@ -32,7 +32,7 @@ export async function sendEmail({
   html?: string;
 }) {
   if (!transporter) {
-    console.log('Email skipped because SMTP is not configured:', { to, subject, text, html });
+    console.warn('Email skipped because SMTP is not configured.', { subject });
     return;
   }
 

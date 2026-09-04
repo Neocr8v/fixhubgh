@@ -2,8 +2,15 @@ import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import { db, UserRow } from './db';
 
-const SECRET = process.env.SESSION_SECRET || 'hostel-maintenance-dev-secret-change-me';
+const SECRET = process.env.SESSION_SECRET;
 const COOKIE_NAME = 'hostel_session';
+
+function getSecret() {
+  if (!SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET must be configured in production.');
+  }
+  return SECRET || 'hostel-maintenance-dev-secret-change-me';
+}
 
 export interface SessionUser {
   id: string;
@@ -20,7 +27,7 @@ export interface SessionUser {
 }
 
 export function signSession(user: SessionUser) {
-  return jwt.sign(user, SECRET, { expiresIn: '7d' });
+  return jwt.sign(user, getSecret(), { expiresIn: '7d' });
 }
 
 export function setSessionCookie(user: SessionUser) {
@@ -28,6 +35,7 @@ export function setSessionCookie(user: SessionUser) {
   cookies().set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 60 * 60 * 24 * 7,
   });
@@ -41,7 +49,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   const token = cookies().get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
-    const decoded = jwt.verify(token, SECRET) as SessionUser;
+    const decoded = jwt.verify(token, getSecret()) as SessionUser;
     const fresh = await getUserById(decoded.id);
     if (!fresh || fresh.is_active !== 1) return null;
     return toSessionUser(fresh);

@@ -26,12 +26,12 @@ export default async function Home() {
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-300 overflow-hidden">
               <img
                 src="/logo.png"
-                alt="HostelCare logo"
+                alt="FixHub logo"
                 className="h-full w-full object-cover"
               />
             </div>
             <div>
-              <p className="font-semibold">HostelCare</p>
+              <p className="font-semibold">FixHub</p>
               <p className="text-xs text-slate-400">Hostel maintenance made simple</p>
             </div>
           </div>

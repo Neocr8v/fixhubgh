@@ -65,10 +65,10 @@ export default function TopBar({ user, pathname }: { user: { name: string; role:
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-white shadow-sm shadow-slate-400/10 overflow-hidden">
-            <img src="/logo.png" alt="HostelCare logo" className="h-full w-full object-cover" />
+            <img src="/logo.png" alt="FixHub logo" className="h-full w-full object-cover" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-[0.32em] text-slate-500">HostelCare</p>
+            <p className="text-xs uppercase tracking-[0.32em] text-slate-500">FixHub</p>
             <h1 className="text-lg font-semibold text-slate-900">{pageTitle}</h1>
             <p className="mt-1 text-sm text-slate-500">{pageSubtitle}</p>
           </div>

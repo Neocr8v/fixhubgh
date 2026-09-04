@@ -107,9 +107,9 @@ export async function POST(req: NextRequest) {
   const created = (await db.prepare('SELECT * FROM issues WHERE id = ?').get(id)) as unknown as IssueRow;
 
   if (user.email) {
-    const subject = `HostelCare: Issue reported ${ticketNo}`;
-    const text = `Hi ${user.name},\n\nYour issue has been reported successfully with ticket number ${ticketNo}.\n\nTitle: ${title}\nCategory: ${category}\nRoom: ${room} (${hostel})\n\nYou can log in to the portal to track progress.\n\nThank you,\nHostelCare Team`;
-    const html = `<p>Hi ${user.name},</p><p>Your issue has been reported successfully with ticket number <strong>${ticketNo}</strong>.</p><p><strong>Title:</strong> ${title}<br/><strong>Category:</strong> ${category}<br/><strong>Room:</strong> ${room} (${hostel})</p><p>You can log in to the portal to track progress.</p><p>Thank you,<br/>HostelCare Team</p>`;
+    const subject = `FixHub: Issue reported ${ticketNo}`;
+    const text = `Hi ${user.name},\n\nYour issue has been reported successfully with ticket number ${ticketNo}.\n\nTitle: ${title}\nCategory: ${category}\nRoom: ${room} (${hostel})\n\nYou can log in to the portal to track progress.\n\nThank you,\nFixHub Team`;
+    const html = `<p>Hi ${user.name},</p><p>Your issue has been reported successfully with ticket number <strong>${ticketNo}</strong>.</p><p><strong>Title:</strong> ${title}<br/><strong>Category:</strong> ${category}<br/><strong>Room:</strong> ${room} (${hostel})</p><p>You can log in to the portal to track progress.</p><p>Thank you,<br/>FixHub Team</p>`;
     sendEmail({ to: user.email, subject, text, html }).catch((error) => {
       console.error('Failed to send issue confirmation email:', error);
     });
