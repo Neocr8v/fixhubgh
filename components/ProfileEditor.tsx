@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface ProfileData {
   id: string;
@@ -18,6 +19,7 @@ interface ProfileData {
 }
 
 export default function ProfileEditor({ user }: { user: { name: string; role: string; room?: string | null } }) {
+  const router = useRouter();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -115,6 +117,7 @@ export default function ProfileEditor({ user }: { user: { name: string; role: st
       setPassword('');
       setMessage('Profile updated successfully.');
       setError(null);
+      router.refresh();
       setTimeout(() => setMessage(null), 4000);
     } catch (err) {
       setError('Unable to update profile.');
