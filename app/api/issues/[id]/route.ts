@@ -70,12 +70,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!tech || tech.role !== 'technician') {
       return NextResponse.json({ error: 'Invalid technician.' }, { status: 400 });
     }
-    await db
-      .prepare(
-        'UPDATE issues SET technician_id = ?, status = CASE WHEN status = \'reported\' THEN \'assigned\' ELSE status END WHERE id = ?'
-      )
-      .run(technicianId, issue.id);
-    messages.push(`Assigned to ${tech.name} (${tech.specialty ?? 'General'}).`);
+    if (issue.technician_id !== technicianId) {
+      await db
+        .prepare(
+          'UPDATE issues SET technician_id = ?, status = CASE WHEN status = \'reported\' THEN \'assigned\' ELSE status END WHERE id = ?'
+        )
+        .run(technicianId, issue.id);
+      messages.push(`Assigned to ${tech.name} (${tech.specialty ?? 'General'}).`);
+    }
   }
 
   if (priority !== undefined) {
@@ -104,12 +106,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       resolvedAt = new Date().toISOString();
     }
 
-    await db.prepare('UPDATE issues SET status = ?, resolved_at = ? WHERE id = ?').run(statusToSave, resolvedAt, issue.id);
+    if (statusToSave !== issue.status) {
+      await db.prepare('UPDATE issues SET status = ?, resolved_at = ? WHERE id = ?').run(statusToSave, resolvedAt, issue.id);
 
-    if (user.role === 'technician' && status === 'resolved') {
-      messages.push('Submitted work for admin approval.');
-    } else {
-      messages.push(`Status updated to "${statusToSave.replace('_', ' ')}".`);
+      if (user.role === 'technician' && status === 'resolved') {
+        messages.push('Submitted work for admin approval.');
+      } else {
+        messages.push(`Status updated to "${statusToSave.replace('_', ' ')}".`);
+      }
     }
   }
 

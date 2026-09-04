@@ -45,9 +45,9 @@ export async function GET(req: Request) {
       .get(...params)) as unknown as { total: number; resolved: number | null; duplicates: number | null };
 
     const totals = {
-      total: totalsRow.total ?? 0,
-      resolved: totalsRow.resolved ?? 0,
-      duplicates: totalsRow.duplicates ?? 0,
+      total: Number(totalsRow.total ?? 0),
+      resolved: Number(totalsRow.resolved ?? 0),
+      duplicates: Number(totalsRow.duplicates ?? 0),
     };
 
     const avgResolutionRow = (await db
@@ -125,7 +125,7 @@ export async function GET(req: Request) {
       byStatus,
       byPriority,
       totals,
-      avgResolutionDays: avgResolutionRow.avg_days,
+      avgResolutionDays: avgResolutionRow.avg_days === null ? null : Number(avgResolutionRow.avg_days),
       trend,
       byRoom,
       technicianLoad,

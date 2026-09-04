@@ -135,7 +135,7 @@ export default function AnalyticsPanel() {
         <StatTile label="Open" value={`${openRate}%`} />
         <StatTile
           label="Avg. resolution"
-          value={data.avgResolutionDays ? `${data.avgResolutionDays.toFixed(1)}d` : '—'}
+          value={typeof data.avgResolutionDays === 'number' && Number.isFinite(data.avgResolutionDays) ? `${data.avgResolutionDays.toFixed(1)}d` : '—'}
         />
       </div>
 
