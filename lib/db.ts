@@ -1,5 +1,4 @@
 import { Pool } from 'pg';
-import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
@@ -7,278 +6,138 @@ import { nanoid } from 'nanoid';
 import { HOSTELS } from './constants';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-const DB_PATH = path.join(DATA_DIR, 'hostel.db');
 const POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
+
+type SqliteStatement = { all: (...params: unknown[]) => unknown[]; get: (...params: unknown[]) => unknown; run: (...params: unknown[]) => unknown };
+type SqliteDatabase = { exec: (sql: string) => void; prepare: (sql: string) => SqliteStatement };
 
 declare global {
   // eslint-disable-next-line no-var
-  var __hostelDb: DatabaseSync | undefined;
+  var __hostelDb: SqliteDatabase | undefined;
+  // eslint-disable-next-line no-var
+  var __hostelPool: Pool | undefined;
+  // eslint-disable-next-line no-var
+  var __hostelPostgresReady: Promise<void> | undefined;
 }
 
-function createConnection() {
-  const conn = new DatabaseSync(DB_PATH);
-  conn.exec('PRAGMA journal_mode = WAL;');
+export interface DbStatement {
+  all: (...params: unknown[]) => Promise<unknown[]>;
+  get: (...params: unknown[]) => Promise<unknown>;
+  run: (...params: unknown[]) => Promise<{ changes: number }>;
+}
+export interface Database { prepare: (sql: string) => DbStatement }
+
+function createSqliteConnection(): SqliteDatabase {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  const loadSqlite = eval('require') as (name: string) => { DatabaseSync: new (file: string) => SqliteDatabase };
+  const sqlite = loadSqlite('node:sqlite');
+  const conn = new sqlite.DatabaseSync(path.join(DATA_DIR, 'hostel.db'));
   conn.exec('PRAGMA busy_timeout = 5000;');
+  conn.exec(`
+    CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL, room TEXT, hostel TEXT, specialty TEXT, avatar_url TEXT, phone TEXT, bio TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE IF NOT EXISTS hostels (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE IF NOT EXISTS issues (id TEXT PRIMARY KEY, ticket_no TEXT UNIQUE NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, category TEXT NOT NULL, priority TEXT NOT NULL DEFAULT 'normal', status TEXT NOT NULL DEFAULT 'reported', room TEXT NOT NULL, hostel TEXT NOT NULL DEFAULT 'Main', image_data TEXT, student_id TEXT NOT NULL, technician_id TEXT, duplicate_of TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), resolved_at TEXT);
+    CREATE TABLE IF NOT EXISTS updates (id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, actor_id TEXT, message TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+  `);
+  const hostelCount = Number((conn.prepare('SELECT COUNT(*) AS count FROM hostels').get() as { count?: number }).count ?? 0);
+  if (hostelCount === 0) {
+    const insertHostel = conn.prepare('INSERT INTO hostels (id, name) VALUES (?, ?)');
+    for (const name of HOSTELS) insertHostel.run(`h_${nanoid(10)}`, name);
+  }
+  const userCount = Number((conn.prepare('SELECT COUNT(*) AS count FROM users').get() as { count?: number }).count ?? 0);
+  if (userCount === 0) {
+    const hash = (password: string) => bcrypt.hashSync(password, 10);
+    const insertUser = conn.prepare('INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    insertUser.run('u_admin', 'Dara Whitfield', 'admin@hostel.edu', hash('admin123'), 'admin', null, null, null);
+    insertUser.run('u_tech1', 'Marcus Reid', 'marcus.reid@hostel.edu', hash('tech123'), 'technician', null, null, 'Electrical');
+    insertUser.run('u_tech2', 'Ines Okafor', 'ines.okafor@hostel.edu', hash('tech123'), 'technician', null, null, 'Plumbing');
+    insertUser.run('u_tech3', 'Sam Lindqvist', 'sam.lindqvist@hostel.edu', hash('tech123'), 'technician', null, null, 'General/Furniture');
+    insertUser.run('u_student1', 'Priya Nandan', 'priya.n@student.edu', hash('student123'), 'student', 'B-214', 'Main', null);
+    insertUser.run('u_student2', 'Tom Achebe', 'tom.a@student.edu', hash('student123'), 'student', 'A-108', 'North', null);
+  }
   return conn;
 }
 
 function normalizeSql(sql: string) {
   return sql
     .replace(/datetime\(\s*['"]now['"]\s*\)/gi, 'NOW()')
-    // julianday(a) - julianday(b)  ->  days between two timestamps
-    .replace(
-      /julianday\(([^()]+)\)\s*-\s*julianday\(([^()]+)\)/gi,
-      '(EXTRACT(EPOCH FROM (($1)::timestamptz - ($2)::timestamptz)) / 86400)'
-    )
-    // date(x)  ->  x cast to a date
+    .replace(/julianday\(([^()]+)\)\s*-\s*julianday\(([^()]+)\)/gi, '(EXTRACT(EPOCH FROM (($1)::timestamptz - ($2)::timestamptz)) / 86400)')
     .replace(/date\(([^()]+)\)/gi, '(($1)::date)')
-    .replace(/\?/g, (match, offset, full) => {
-      const q = full.slice(0, offset);
-      const count = (q.match(/\?/g) ?? []).length;
-      return `$${count + 1}`;
-    });
+    .replace(/\?/g, (_match, offset: number, full: string) => `$${(full.slice(0, offset).match(/\?/g) ?? []).length + 1}`);
 }
 
-function createSqliteFacade() {
-  const sqliteDb = global.__hostelDb ?? createConnection();
-  if (process.env.NODE_ENV !== 'production') global.__hostelDb = sqliteDb;
-
-  return {
-    prepare(sql: string) {
-      return {
-        all: (...params: unknown[]) => sqliteDb.prepare(sql).all(...params),
-        get: (...params: unknown[]) => sqliteDb.prepare(sql).get(...params),
-        run: (...params: unknown[]) => sqliteDb.prepare(sql).run(...params),
-      };
-    },
-  };
+function getPostgresPool() {
+  if (!global.__hostelPool) global.__hostelPool = new Pool({ connectionString: POSTGRES_URL, ssl: { rejectUnauthorized: false } });
+  return global.__hostelPool;
 }
 
-function createPostgresFacade() {
-  const pool = new Pool({
-    connectionString: POSTGRES_URL,
-    ssl: { rejectUnauthorized: false },
-  });
+async function initializePostgres() {
+  const pool = getPostgresPool();
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('student','admin','technician')), room TEXT, hostel TEXT, specialty TEXT, avatar_url TEXT, phone TEXT, bio TEXT, is_active INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE TABLE IF NOT EXISTS hostels (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE TABLE IF NOT EXISTS issues (id TEXT PRIMARY KEY, ticket_no TEXT UNIQUE NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, category TEXT NOT NULL, priority TEXT NOT NULL DEFAULT 'normal', status TEXT NOT NULL DEFAULT 'reported', room TEXT NOT NULL, hostel TEXT NOT NULL DEFAULT 'Main', image_data TEXT, student_id TEXT NOT NULL REFERENCES users(id), technician_id TEXT REFERENCES users(id), duplicate_of TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), resolved_at TIMESTAMPTZ);
+    CREATE TABLE IF NOT EXISTS updates (id TEXT PRIMARY KEY, issue_id TEXT NOT NULL REFERENCES issues(id), actor_id TEXT, message TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+    CREATE INDEX IF NOT EXISTS idx_issues_student ON issues(student_id);
+    CREATE INDEX IF NOT EXISTS idx_issues_tech ON issues(technician_id);
+    CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
+    CREATE INDEX IF NOT EXISTS idx_updates_issue ON updates(issue_id);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS hostel TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;
+    ALTER TABLE issues ADD COLUMN IF NOT EXISTS hostel TEXT NOT NULL DEFAULT 'Main';
+  `);
+  for (const name of HOSTELS) await pool.query('INSERT INTO hostels (id, name) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING', [`h_${nanoid(10)}`, name]);
 
-  return {
-    prepare(sql: string) {
-      const normalized = normalizeSql(sql);
-      return {
-        all: async (...params: unknown[]) => {
-          const result = await pool.query(normalized, params);
-          return result.rows;
-        },
-        get: async (...params: unknown[]) => {
-          const result = await pool.query(normalized, params);
-          return result.rows[0];
-        },
-        run: async (...params: unknown[]) => {
-          const result = await pool.query(normalized, params);
-          return { changes: result.rowCount ?? 0 };
-        },
-      };
-    },
-  };
+  const count = Number((await pool.query('SELECT COUNT(*) AS count FROM users')).rows[0]?.count ?? 0);
+  if (count > 0) return;
+  const hash = (password: string) => bcrypt.hashSync(password, 10);
+  const users = [
+    ['u_admin', 'Dara Whitfield', 'admin@hostel.edu', hash('admin123'), 'admin', null, null, null],
+    ['u_tech1', 'Marcus Reid', 'marcus.reid@hostel.edu', hash('tech123'), 'technician', null, null, 'Electrical'],
+    ['u_tech2', 'Ines Okafor', 'ines.okafor@hostel.edu', hash('tech123'), 'technician', null, null, 'Plumbing'],
+    ['u_tech3', 'Sam Lindqvist', 'sam.lindqvist@hostel.edu', hash('tech123'), 'technician', null, null, 'General/Furniture'],
+    ['u_student1', 'Priya Nandan', 'priya.n@student.edu', hash('student123'), 'student', 'B-214', 'Main', null],
+    ['u_student2', 'Tom Achebe', 'tom.a@student.edu', hash('student123'), 'student', 'A-108', 'North', null],
+  ];
+  for (const user of users) await pool.query('INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', user);
 }
 
-export const db = POSTGRES_URL ? createPostgresFacade() : createSqliteFacade();
-
-if (!POSTGRES_URL) {
-  function init() {
-    const sqliteDb = global.__hostelDb ?? createConnection();
-    if (process.env.NODE_ENV !== 'production') global.__hostelDb = sqliteDb;
-
-    sqliteDb.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL CHECK (role IN ('student','admin','technician')),
-        room TEXT,
-        hostel TEXT,
-        specialty TEXT,
-        avatar_url TEXT,
-        phone TEXT,
-        bio TEXT,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-
-      CREATE TABLE IF NOT EXISTS hostels (
-        id TEXT PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-
-      CREATE TABLE IF NOT EXISTS issues (
-        id TEXT PRIMARY KEY,
-        ticket_no TEXT UNIQUE NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        category TEXT NOT NULL,
-        priority TEXT NOT NULL DEFAULT 'normal',
-        status TEXT NOT NULL DEFAULT 'reported',
-        room TEXT NOT NULL,
-        image_data TEXT,
-        student_id TEXT NOT NULL,
-        technician_id TEXT,
-        duplicate_of TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        resolved_at TEXT,
-        FOREIGN KEY (student_id) REFERENCES users(id),
-        FOREIGN KEY (technician_id) REFERENCES users(id)
-      );
-
-      CREATE TABLE IF NOT EXISTS updates (
-        id TEXT PRIMARY KEY,
-        issue_id TEXT NOT NULL,
-        actor_id TEXT,
-        message TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        FOREIGN KEY (issue_id) REFERENCES issues(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_issues_student ON issues(student_id);
-      CREATE INDEX IF NOT EXISTS idx_issues_tech ON issues(technician_id);
-      CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
-      CREATE INDEX IF NOT EXISTS idx_updates_issue ON updates(issue_id);
-    `);
-
-    const schemaInfo = sqliteDb.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
-    if (!schemaInfo.some((field) => field.name === 'is_active')) {
-      sqliteDb.exec(`ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;`);
-    }
-    if (!schemaInfo.some((field) => field.name === 'avatar_url')) {
-      sqliteDb.exec(`ALTER TABLE users ADD COLUMN avatar_url TEXT;`);
-    }
-    if (!schemaInfo.some((field) => field.name === 'phone')) {
-      sqliteDb.exec(`ALTER TABLE users ADD COLUMN phone TEXT;`);
-    }
-    if (!schemaInfo.some((field) => field.name === 'bio')) {
-      sqliteDb.exec(`ALTER TABLE users ADD COLUMN bio TEXT;`);
-    }
-    if (!schemaInfo.some((field) => field.name === 'hostel')) {
-      sqliteDb.exec(`ALTER TABLE users ADD COLUMN hostel TEXT;`);
-    }
-
-    const hostelCount = (sqliteDb.prepare('SELECT COUNT(*) as c FROM hostels').get() as unknown as { c: number }).c;
-    if (hostelCount === 0) {
-      const insertHostel = sqliteDb.prepare('INSERT INTO hostels (id, name) VALUES (?, ?)');
-      for (const name of HOSTELS) {
-        insertHostel.run(`h_${nanoid(10)}`, name);
-      }
-    }
-
-    const issueSchemaInfo = sqliteDb.prepare(`PRAGMA table_info(issues)`).all() as { name: string }[];
-    if (!issueSchemaInfo.some((field) => field.name === 'hostel')) {
-      sqliteDb.exec(`ALTER TABLE issues ADD COLUMN hostel TEXT NOT NULL DEFAULT 'Main';`);
-    }
-
-    const userCount = (sqliteDb.prepare('SELECT COUNT(*) as c FROM users').get() as unknown as { c: number }).c;
-    if (userCount === 0) {
-      const insert = sqliteDb.prepare(
-        `INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty, avatar_url, phone, bio, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      );
-      const hash = (pw: string) => bcrypt.hashSync(pw, 10);
-
-      insert.run('u_admin', 'Dara Whitfield', 'admin@hostel.edu', hash('admin123'), 'admin', null, null, null, null, null, null, 1);
-      insert.run('u_tech1', 'Marcus Reid', 'marcus.reid@hostel.edu', hash('tech123'), 'technician', null, null, 'Electrical', null, null, null, 1);
-      insert.run('u_tech2', 'Ines Okafor', 'ines.okafor@hostel.edu', hash('tech123'), 'technician', null, null, 'Plumbing', null, null, null, 1);
-      insert.run('u_tech3', 'Sam Lindqvist', 'sam.lindqvist@hostel.edu', hash('tech123'), 'technician', null, null, 'General/Furniture', null, null, null, 1);
-      insert.run('u_student1', 'Priya Nandan', 'priya.n@student.edu', hash('student123'), 'student', 'B-214', 'Main', null, null, null, null, 1);
-      insert.run('u_student2', 'Tom Achebe', 'tom.a@student.edu', hash('student123'), 'student', 'A-108', 'North', null, null, null, null, 1);
-
-      const now = new Date();
-      const daysAgo = (n: number) => {
-        const d = new Date(now);
-        d.setDate(d.getDate() - n);
-        return d.toISOString().slice(0, 19).replace('T', ' ');
-      };
-
-      const insertIssue = sqliteDb.prepare(`
-        INSERT INTO issues (id, ticket_no, title, description, category, priority, status, room, hostel, student_id, technician_id, created_at, updated_at, resolved_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const seedIssues: [string, string, string, string, string, string, string, string, string, string, string | null, number, number, number | null][] = [
-        ['i1', 'HM-0001', 'Flickering ceiling light', 'The ceiling light in the room flickers constantly and buzzes at night.', 'Electrical', 'normal', 'resolved', 'B-214', 'Main', 'u_student1', 'u_tech1', 9, 7, 7],
-        ['i2', 'HM-0002', 'Leaking sink pipe', 'Water is pooling under the bathroom sink every morning.', 'Plumbing', 'high', 'in_progress', 'A-108', 'North', 'u_student2', 'u_tech2', 5, 2, null],
-        ['i3', 'HM-0003', 'No internet connection', 'Ethernet port in the room has had no connection for two days.', 'Internet', 'urgent', 'assigned', 'B-214', 'Main', 'u_student1', 'u_tech3', 3, 1, null],
-        ['i4', 'HM-0004', 'Broken wardrobe hinge', 'One door of the wardrobe has fallen off its hinge.', 'Furniture', 'low', 'reported', 'A-108', 'South', 'u_student2', null, 1, 1, null],
-        ['i5', 'HM-0005', 'Power socket not working', 'The socket near the desk has stopped supplying power.', 'Electrical', 'normal', 'resolved', 'B-214', 'Main', 'u_student1', 'u_tech1', 14, 12, 12],
-        ['i6', 'HM-0006', 'Blocked drain in shower', 'Shower drains very slowly and water backs up.', 'Plumbing', 'high', 'resolved', 'A-108', 'North', 'u_student2', 'u_tech2', 11, 9, 9],
-      ];
-
-      for (const row of seedIssues) {
-        insertIssue.run(
-          row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10],
-          daysAgo(row[11]), daysAgo(row[12]), row[13] !== null ? daysAgo(row[13]) : null
-        );
-      }
-
-      const insertUpdate = sqliteDb.prepare(
-        `INSERT INTO updates (id, issue_id, actor_id, message, created_at) VALUES (?, ?, ?, ?, ?)`
-      );
-      insertUpdate.run('up1', 'i1', 'u_student1', 'Issue reported by student.', daysAgo(9));
-      insertUpdate.run('up2', 'i1', 'u_admin', 'Assigned to Marcus Reid (Electrical).', daysAgo(8));
-      insertUpdate.run('up3', 'i1', 'u_tech1', 'Replaced faulty ballast. Marked resolved.', daysAgo(7));
-      insertUpdate.run('up4', 'i2', 'u_student2', 'Issue reported by student.', daysAgo(5));
-      insertUpdate.run('up5', 'i2', 'u_admin', 'Assigned to Ines Okafor (Plumbing).', daysAgo(4));
-      insertUpdate.run('up6', 'i2', 'u_tech2', 'Inspected pipe, ordering replacement gasket.', daysAgo(2));
-      insertUpdate.run('up7', 'i3', 'u_student1', 'Issue reported by student. Flagged urgent — needed for coursework.', daysAgo(3));
-      insertUpdate.run('up8', 'i3', 'u_admin', 'Assigned to Sam Lindqvist.', daysAgo(1));
-      insertUpdate.run('up9', 'i4', 'u_student2', 'Issue reported by student.', daysAgo(1));
-    }
+function postgresReady() {
+  if (!global.__hostelPostgresReady) {
+    global.__hostelPostgresReady = initializePostgres().catch((error) => { global.__hostelPostgresReady = undefined; throw error; });
   }
-
-  init();
+  return global.__hostelPostgresReady;
 }
 
+function createPostgresFacade(): Database {
+  const pool = getPostgresPool();
+  return { prepare(sql) {
+    const normalized = normalizeSql(sql);
+    return {
+      all: async (...params) => { await postgresReady(); return (await pool.query(normalized, params)).rows; },
+      get: async (...params) => { await postgresReady(); return (await pool.query(normalized, params)).rows[0]; },
+      run: async (...params) => { await postgresReady(); return { changes: (await pool.query(normalized, params)).rowCount ?? 0 }; },
+    };
+  } };
+}
+
+function createSqliteFacade(): Database {
+  const sqliteDb = global.__hostelDb ?? createSqliteConnection();
+  if (process.env.NODE_ENV !== 'production') global.__hostelDb = sqliteDb;
+  return { prepare(sql) {
+    return {
+      all: async (...params) => sqliteDb.prepare(sql).all(...params),
+      get: async (...params) => sqliteDb.prepare(sql).get(...params),
+      run: async (...params) => ({ changes: Number((sqliteDb.prepare(sql).run(...params) as { changes?: number }).changes ?? 0) }),
+    };
+  } };
+}
+
+export const db: Database = POSTGRES_URL ? createPostgresFacade() : createSqliteFacade();
 export type Role = 'student' | 'admin' | 'technician';
-
-export interface UserRow {
-  id: string;
-  name: string;
-  email: string;
-  password_hash: string;
-  role: Role;
-  room: string | null;
-  hostel: string | null;
-  specialty: string | null;
-  avatar_url: string | null;
-  phone: string | null;
-  bio: string | null;
-  is_active: number;
-  created_at: string;
-}
-
-export interface IssueRow {
-  id: string;
-  ticket_no: string;
-  title: string;
-  description: string;
-  category: string;
-  priority: string;
-  status: string;
-  room: string;
-  hostel: string;
-  image_data: string | null;
-  student_id: string;
-  technician_id: string | null;
-  duplicate_of: string | null;
-  created_at: string;
-  updated_at: string;
-  resolved_at: string | null;
-}
-
-export interface UpdateRow {
-  id: string;
-  issue_id: string;
-  actor_id: string | null;
-  message: string;
-  created_at: string;
-}
+export interface UserRow { id: string; name: string; email: string; password_hash: string; role: Role; room: string | null; hostel: string | null; specialty: string | null; avatar_url: string | null; phone: string | null; bio: string | null; is_active: number; created_at: string; }
+export interface IssueRow { id: string; ticket_no: string; title: string; description: string; category: string; priority: string; status: string; room: string; hostel: string; image_data: string | null; student_id: string; technician_id: string | null; duplicate_of: string | null; created_at: string; updated_at: string; resolved_at: string | null; }
+export interface UpdateRow { id: string; issue_id: string; actor_id: string | null; message: string; created_at: string; }

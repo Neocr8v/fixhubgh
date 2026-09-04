@@ -3,8 +3,8 @@ import { getCurrentUser } from '@/lib/auth';
 import AppShell from '@/components/AppShell';
 import ProfileEditor from '@/components/ProfileEditor';
 
-export default function ProfilePage() {
-  const user = getCurrentUser();
+export default async function ProfilePage() {
+  const user = await getCurrentUser();
   if (!user) redirect('/');
 
   return (

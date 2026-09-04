@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(req: Request) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   if (user.role !== 'admin') return NextResponse.json({ error: 'Admin access only.' }, { status: 403 });
 

@@ -11,8 +11,8 @@ features" (automatic priority detection and duplicate-complaint detection).
 ## Stack
 
 - **Next.js 14** (App Router, TypeScript, Route Handlers as the API)
-- **SQLite via Node's built-in `node:sqlite`** — no native module to compile,
-  no `npm install` build step, just a single file at `data/hostel.db`
+- **PostgreSQL via `pg`** for production deployments, with SQLite via Node's
+  built-in `node:sqlite` as a local fallback
 - **Tailwind CSS** for styling
 - **Recharts** for the admin analytics dashboard
 - JWT session cookies for auth (`jsonwebtoken` + `bcryptjs`)
@@ -28,9 +28,10 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). A SQLite database is
-created automatically on first run at `data/hostel.db`, seeded with demo
-accounts and a handful of sample tickets.
+Open [http://localhost:3000](http://localhost:3000). Without a database URL, a
+local SQLite database is created at `data/hostel.db`. For Vercel, set
+`POSTGRES_URL` (or `DATABASE_URL`) to a PostgreSQL connection string; the schema
+and demo accounts are initialized automatically on the first request.
 
 ### Demo accounts
 
@@ -67,7 +68,7 @@ can self-register from the "Create an account" link.
 ## Notes on the image uploads
 
 To keep setup to a single `npm install` with no file storage or cloud bucket
-to configure, photos are stored as base64 inside the SQLite row (capped at
+to configure, photos are stored as base64 inside the database row (capped at
 ~4.5MB per photo). This is fine for a course project or small hostel; for a
 production deployment you'd want to swap this for an object store (S3, R2,
 etc.) and store just the URL.
@@ -82,7 +83,7 @@ app/
   register/       → student self-registration
 components/       → shared UI (ticket cards, dashboards, charts)
 lib/
-  db.ts           → SQLite schema + seed data
+  db.ts           → PostgreSQL schema/initialization + local SQLite fallback
   auth.ts         → session cookie helpers
   issues.ts       → priority detection, duplicate detection, ticket numbering
   constants.ts    → client-safe shared constants (categories, status labels)
@@ -97,4 +98,9 @@ npm run start
 ```
 
 Set a real `SESSION_SECRET` environment variable in production (falls back to
-a development default otherwise).
+a development default otherwise). Vercel deployments also require
+`POSTGRES_URL` or `DATABASE_URL` pointing to a persistent PostgreSQL database.
+
+To copy an existing local SQLite database into PostgreSQL, set the Postgres
+connection variable and run `npm run migrate:postgres`. Set `SQLITE_PATH` if the
+source database is not at `data/hostel.db`.

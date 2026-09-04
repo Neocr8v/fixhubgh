@@ -11,7 +11,7 @@ function requireAdmin(user: { role: string }) {
 }
 
 export async function GET() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   try {
     requireAdmin(user);
@@ -22,11 +22,12 @@ export async function GET() {
   const users = db
     .prepare('SELECT id, name, email, role, hostel, room, specialty, avatar_url, is_active, created_at FROM users ORDER BY role DESC, name ASC')
     .all();
-  return NextResponse.json({ users });
+  const resolvedUsers = await users;
+  return NextResponse.json({ users: resolvedUsers });
 }
 
 export async function POST(req: NextRequest) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   try {
     requireAdmin(user);
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!['student', 'technician', 'admin'].includes(role)) {
     return NextResponse.json({ error: 'Invalid role.' }, { status: 400 });
   }
-  if (getUserByEmail(email)) {
+  if (await getUserByEmail(email)) {
     return NextResponse.json({ error: 'A user with that email already exists.' }, { status: 409 });
   }
   if (role !== 'student' && !specialty && role === 'technician') {
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   const id = `u_${nanoid(10)}`;
   const passwordHash = bcrypt.hashSync(password, 10);
-  db.prepare(
+  await db.prepare(
     `INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
   ).run(id, name, email, passwordHash, role, room, hostel, specialty);
 
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
   try {
     requireAdmin(user);
@@ -84,7 +85,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'User ID and action are required.' }, { status: 400 });
   }
 
-  const target = getUserById(id);
+  const target = await getUserById(id);
   if (!target) {
     return NextResponse.json({ error: 'User not found.' }, { status: 404 });
   }
@@ -94,7 +95,7 @@ export async function PATCH(req: NextRequest) {
 
   if (action === 'toggle_active') {
     const newStatus = target.is_active === 1 ? 0 : 1;
-    db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, id);
+    await db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, id);
     return NextResponse.json({ ok: true, id, is_active: newStatus });
   }
 
@@ -104,7 +105,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
     }
     const passwordHash = bcrypt.hashSync(tempPassword, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
+    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
     return NextResponse.json({ ok: true });
   }
 

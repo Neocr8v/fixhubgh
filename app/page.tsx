@@ -8,8 +8,8 @@ const stats = [
   { label: 'Smart routing', value: 'Send work orders to staff' },
 ];
 
-export default function Home() {
-  const user = getCurrentUser();
+export default async function Home() {
+  const user = await getCurrentUser();
   if (user) {
     if (user.role === 'admin') redirect('/dashboard/admin');
     if (user.role === 'technician') redirect('/dashboard/technician');

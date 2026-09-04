@@ -4,8 +4,8 @@ import AppShell from '@/components/AppShell';
 import AdminUserManagement from '@/components/AdminUserManagement';
 import AdminHostelManagement from '@/components/AdminHostelManagement';
 
-export default function AdminUsersPage() {
-  const user = getCurrentUser();
+export default async function AdminUsersPage() {
+  const user = await getCurrentUser();
   if (!user) redirect('/');
   if (user.role !== 'admin') redirect('/');
 
