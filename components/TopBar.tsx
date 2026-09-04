@@ -34,7 +34,7 @@ function getPageSubtitle(pathname: string) {
   return PAGE_SUBTITLES[pathname] ?? 'A quick view of your current maintenance workflow.';
 }
 
-export default function TopBar({ user, pathname }: { user: { name: string; role: string }; pathname: string }) {
+export default function TopBar({ user, pathname }: { user: { id: string; name: string; role: string }; pathname: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentSearch = searchParams.get('search') ?? '';
@@ -90,7 +90,7 @@ export default function TopBar({ user, pathname }: { user: { name: string; role:
         </form>
 
         <div className="flex items-center gap-3">
-          <NotificationBell />
+          <NotificationBell userId={user.id} />
           <div className="hidden rounded-3xl bg-slate-100 px-4 py-2 text-sm text-slate-700 sm:block">
             {tagline}
           </div>

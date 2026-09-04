@@ -16,11 +16,11 @@ interface NotificationPayload {
   newIssues: NotificationItem[];
 }
 
-export default function NotificationBell() {
+export default function NotificationBell({ userId }: { userId: string }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationPayload>({ total: 0, newIssues: [] });
+  const storageKey = `fixhub:notifications:${userId}`;
   const [seenIds, setSeenIds] = useState<string[]>([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadNotifications = useCallback(async () => {
@@ -30,20 +30,21 @@ export default function NotificationBell() {
       if (!res.ok) return;
       const data = await res.json();
       setNotifications(data);
-      if (!hasLoaded) {
-        setSeenIds((data.newIssues ?? []).map((issue: NotificationItem) => issue.id));
-        setHasLoaded(true);
-      } else if (open) {
-        setSeenIds((data.newIssues ?? []).map((issue: NotificationItem) => issue.id));
-      }
     } finally {
       setLoading(false);
     }
-  }, [hasLoaded, open]);
+  }, []);
 
-  const unseenCount = hasLoaded
-    ? notifications.newIssues.filter((issue) => !seenIds.includes(issue.id)).length
-    : 0;
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      setSeenIds(stored ? JSON.parse(stored) : []);
+    } catch {
+      setSeenIds([]);
+    }
+  }, [storageKey]);
+
+  const unseenCount = notifications.newIssues.filter((issue) => !seenIds.includes(issue.id)).length;
 
   useEffect(() => {
     loadNotifications();
@@ -58,7 +59,9 @@ export default function NotificationBell() {
         onClick={() => setOpen((current) => {
           const nextOpen = !current;
           if (!current) {
-            setSeenIds(notifications.newIssues.map((issue) => issue.id));
+            const nextSeenIds = Array.from(new Set([...seenIds, ...notifications.newIssues.map((issue) => issue.id)]));
+            setSeenIds(nextSeenIds);
+            window.localStorage.setItem(storageKey, JSON.stringify(nextSeenIds));
             loadNotifications();
           }
           return nextOpen;

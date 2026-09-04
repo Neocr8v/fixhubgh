@@ -6,7 +6,7 @@ import { ReactNode } from 'react';
 import TopBar from './TopBar';
 
 interface Props {
-  user: { name: string; role: string; email: string; room?: string | null; avatar_url?: string | null };
+  user: { id: string; name: string; role: string; email: string; room?: string | null; avatar_url?: string | null };
   children: ReactNode;
 }
 

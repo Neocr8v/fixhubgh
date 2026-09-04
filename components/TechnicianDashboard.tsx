@@ -34,8 +34,8 @@ export default function TechnicianDashboard({ user }: { user: { name: string; sp
   const activeCount = issues.filter((i) => i.status !== 'resolved').length;
 
   return (
-    <div className="px-10 py-8 max-w-6xl">
-      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr] items-start mb-8">
+    <div className="w-full max-w-6xl px-6 py-8 lg:px-10">
+      <div className="mb-8 space-y-6">
         <div>
           <div className="font-mono text-[11px] tracking-[0.2em] text-amber-dark uppercase mb-1">
             {user.specialty ?? 'General maintenance'}
@@ -45,7 +45,7 @@ export default function TechnicianDashboard({ user }: { user: { name: string; sp
             {activeCount === 0 ? 'No active assignments.' : `${activeCount} active assignment${activeCount === 1 ? '' : 's'}.`}
           </p>
         </div>
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 min-w-0">
+        <div className="grid w-full gap-4 sm:grid-cols-3">
           <MetricCard label="Active" value={activeCount.toString()} detail="Assignments not resolved" />
           <MetricCard label="Search" value={search ? 'Active' : 'Idle'} detail={search ? `Filtering by “${search}”` : 'Use the top search bar.'} />
           <MetricCard label="Tab" value={tab === 'open' ? 'Open' : tab.replace('_', ' ')} detail="Current ticket filter" />
