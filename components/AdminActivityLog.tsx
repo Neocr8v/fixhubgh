@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { formatDatabaseDate } from '@/lib/dates';
 
 interface ActivityItem {
   id: string;
@@ -44,7 +45,7 @@ export default function AdminActivityLog() {
           {activity.map((item) => (
             <div key={item.id} className="rounded-2xl border border-line p-4 bg-white/5">
               <div className="flex flex-wrap items-center gap-3 text-xs text-ink/60 mb-2">
-                <span>{new Date(item.created_at.replace(' ', 'T') + 'Z').toLocaleString()}</span>
+                <span>{formatDatabaseDate(item.created_at)}</span>
                 <span className="h-1.5 w-1.5 rounded-full bg-amber" />
                 <span>{item.actor_name ?? 'System'}</span>
                 {item.ticket_no ? <span>• {item.ticket_no}</span> : null}

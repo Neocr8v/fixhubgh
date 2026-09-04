@@ -3,7 +3,7 @@ import './globals.css';
 import { ToastProvider } from '@/components/ToastProvider';
 
 export const metadata: Metadata = {
-  title: 'Hostel Maintenance — Work Order System',
+  title: 'FixHub - Hostel Maintenance Management System',
   description: 'Report, track, and resolve hostel maintenance issues.',
 };
 

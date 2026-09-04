@@ -17,8 +17,8 @@ const NAV: Record<string, { href: string; label: string }[]> = {
   ],
   admin: [
     { href: '/dashboard/admin', label: 'Overview' },
-    { href: '/dashboard/admin/users', label: 'Team' },
-    { href: '/dashboard/profile', label: 'My profile' },
+    { href: '/dashboard/admin/users', label: 'Team & hostels' },
+    { href: '/dashboard/profile', label: 'Settings & profile' },
   ],
   technician: [
     { href: '/dashboard/technician', label: 'My assignments' },
@@ -48,7 +48,10 @@ export default function AppShell({ user, children }: Props) {
             <div className="font-mono text-[11px] tracking-[0.2em] text-amber uppercase">Work Order System</div>
             <div className="font-display text-lg font-semibold mt-1">Hostel Maintenance</div>
           </div>
-          <nav className="flex-1 px-3 py-4 space-y-1">
+          <nav className="flex-1 px-3 py-5">
+            <div className="px-3 pb-3 text-[10px] font-mono uppercase tracking-[0.28em] text-paper/40">
+              {user.role === 'admin' ? 'Administration' : 'Workspace'}
+            </div>
             {links.map((l) => {
               const active = pathname === l.href;
               return (
@@ -63,6 +66,14 @@ export default function AppShell({ user, children }: Props) {
                 </Link>
               );
             })}
+            {user.role === 'admin' ? (
+              <div className="mt-8 border-t border-white/10 px-3 pt-5">
+                <div className="text-[10px] font-mono uppercase tracking-[0.28em] text-amber">Admin desk</div>
+                <p className="mt-2 text-xs leading-5 text-paper/55">
+                  Keep tickets moving, maintain your team, and keep hostel records current.
+                </p>
+              </div>
+            ) : null}
           </nav>
           <div className="px-4 py-5 border-t border-white/10">
             <div className="flex items-center gap-3">

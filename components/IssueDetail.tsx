@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { StatusBadge, PriorityTag } from './StatusBadge';
 import { STATUS_LABELS } from '@/lib/constants';
+import { formatDatabaseDate } from '@/lib/dates';
 
 interface IssueFull {
   id: string;
@@ -265,7 +266,7 @@ export default function IssueDetail({ id, user }: { id: string; user: { role: st
               <div>
                 <p className="text-sm text-ink/80">{u.message}</p>
                 <p className="text-xs text-ink/40 mt-0.5">
-                  {u.actor_name} · {new Date(u.created_at.replace(' ', 'T') + 'Z').toLocaleString()}
+                  {u.actor_name} · {formatDatabaseDate(u.created_at)}
                 </p>
               </div>
             </li>

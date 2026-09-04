@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { StatusBadge, PriorityTag } from './StatusBadge';
+import { timeAgo } from '@/lib/dates';
 
 export interface IssueListItem {
   id: string;
@@ -16,17 +17,6 @@ export interface IssueListItem {
   technician_name?: string | null;
   created_at: string;
   duplicate_of?: string | null;
-}
-
-function timeAgo(dateStr: string) {
-  const then = new Date(dateStr.replace(' ', 'T') + 'Z').getTime();
-  const now = Date.now();
-  const diffMin = Math.max(1, Math.round((now - then) / 60000));
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.round(diffHr / 24);
-  return `${diffDay}d ago`;
 }
 
 export default function IssueTicket({ issue }: { issue: IssueListItem }) {
