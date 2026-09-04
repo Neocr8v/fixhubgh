@@ -52,7 +52,7 @@ export default function NotificationBell() {
   }, [loadNotifications]);
 
   return (
-    <div className="relative">
+    <div className="relative z-50">
       <button
         type="button"
         onClick={() => setOpen((current) => {
@@ -78,7 +78,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-40 mt-3 w-80 overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xl">
+        <div className="absolute right-0 z-[100] mt-3 w-80 overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-2xl">
           <div className="border-b border-slate-200/70 px-4 py-3 text-sm font-semibold text-slate-900">Recent alerts</div>
           <div className="max-h-64 overflow-y-auto p-3">
             {loading ? (

@@ -61,7 +61,7 @@ export default function TopBar({ user, pathname }: { user: { name: string; role:
   };
 
   return (
-    <header className="border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
+    <header className="relative z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-white shadow-sm shadow-slate-400/10 overflow-hidden">
