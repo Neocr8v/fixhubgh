@@ -93,3 +93,9 @@ export async function getActiveTechnicians(): Promise<UserRow[]> {
     .prepare('SELECT * FROM users WHERE role = ? AND is_active = 1 ORDER BY name ASC')
     .all('technician')) as unknown as UserRow[];
 }
+
+export async function getActiveAdmins(): Promise<UserRow[]> {
+  return (await db
+    .prepare('SELECT * FROM users WHERE role = ? AND is_active = 1 ORDER BY name ASC')
+    .all('admin')) as unknown as UserRow[];
+}

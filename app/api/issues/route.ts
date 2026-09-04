@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { db, IssueRow } from '@/lib/db';
-import { getCurrentUser, getUserById } from '@/lib/auth';
+import { getActiveAdmins, getCurrentUser, getUserById } from '@/lib/auth';
 import { detectPriority, nextTicketNumber, findPotentialDuplicates, CATEGORIES } from '@/lib/issues';
 import { sendEmail } from '@/lib/mail';
 
@@ -113,6 +113,17 @@ export async function POST(req: NextRequest) {
     sendEmail({ to: user.email, subject, text, html }).catch((error) => {
       console.error('Failed to send issue confirmation email:', error);
     });
+  }
+
+  const admins = await getActiveAdmins();
+  for (const admin of admins) {
+    if (!admin.email) continue;
+    void sendEmail({
+      to: admin.email,
+      subject: `FixHub: New issue reported ${ticketNo}`,
+      text: `Hello ${admin.name},\n\nA new maintenance issue was reported by ${user.name}.\n\nTicket: ${ticketNo}\nTitle: ${title}\nCategory: ${category}\nLocation: ${room} (${hostel})\n\nReview it in the FixHub admin dashboard.\n\nFixHub Team`,
+      html: `<p>Hello ${admin.name},</p><p>A new maintenance issue was reported by ${user.name}.</p><p><strong>Ticket:</strong> ${ticketNo}<br/><strong>Title:</strong> ${title}<br/><strong>Category:</strong> ${category}<br/><strong>Location:</strong> ${room} (${hostel})</p><p>Review it in the FixHub admin dashboard.</p><p>FixHub Team</p>`,
+    }).catch((error) => console.error('Failed to send new issue email to admin:', error));
   }
 
   return NextResponse.json({

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 import { db } from '@/lib/db';
 import { getCurrentUser, getUserByEmail, getUserById } from '@/lib/auth';
+import { sendEmail } from '@/lib/mail';
 
 function requireAdmin(user: { role: string }) {
   if (!user || user.role !== 'admin') {
@@ -106,6 +107,14 @@ export async function PATCH(req: NextRequest) {
     }
     const passwordHash = bcrypt.hashSync(tempPassword, 10);
     await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
+    if (target.email) {
+      void sendEmail({
+        to: target.email,
+        subject: 'FixHub: Your password was reset',
+        text: `Hello ${target.name},\n\nAn administrator reset your FixHub password. For security, sign in with the temporary password provided to you separately and change it from your profile settings.\n\nIf you did not expect this change, contact your administrator immediately.\n\nFixHub Security`,
+        html: `<p>Hello ${target.name},</p><p>An administrator reset your FixHub password.</p><p>For security, sign in with the temporary password provided to you separately and change it from your profile settings.</p><p>If you did not expect this change, contact your administrator immediately.</p><p>FixHub Security</p>`,
+      }).catch((error) => console.error('Failed to send password reset email:', error));
+    }
     return NextResponse.json({ ok: true });
   }
 

@@ -131,11 +131,14 @@ If SMTP is not configured, the application does not fail the maintenance action.
 | Event | Student email | Technician email | Administrator email |
 |---|---:|---:|---:|
 | Student registers | No | No | No |
-| Student submits a new issue | Yes, confirmation | No | No direct email |
-| Administrator assigns a technician | Yes, issue update | Yes, assignment/update | No direct email |
-| Technician changes status or adds a note | Yes, issue update | Yes when assignment/status applies | No direct email |
-| Technician submits work for approval | Yes, issue update | Yes, update | In-app alert through the notification bell |
-| Administrator approves resolution | Yes, resolution update | Yes when the ticket is assigned or status changes | In-app activity/alert |
+| Student submits a new issue | Yes, confirmation | No | Yes, new issue alert |
+| Administrator assigns a technician | Yes, assignment update | Yes, assignment update | No direct email |
+| Technician changes status | Yes, status update | Yes when status applies | No direct email |
+| Technician adds an internal note | No routine email | No routine email | In-app activity |
+| Technician submits work for approval | Yes, status update | Yes, update | Yes, approval-needed email and in-app alert |
+| Administrator approves resolution | Yes, resolution update | Yes when the ticket status changes | In-app activity/alert |
+| User changes their password | Yes, security alert | Yes, security alert | Yes for the affected user only |
+| Administrator resets a password | Yes, security alert | Yes, security alert | Yes for the affected user only |
 
 ### Student Email Content
 
@@ -174,7 +177,7 @@ Administrators currently receive workflow notifications through the application 
 - Recent activity appears in the admin activity view.
 - Analytics provide operational summaries.
 
-The current implementation does not send direct email to administrators. An administrator email channel can be added later by finding active admin users and calling the same SMTP service after issue creation, assignment, or technician submission.
+Administrators receive direct email for newly reported issues and technician submissions awaiting approval. Routine ticket notes and priority-only changes remain in-app to avoid unnecessary email volume.
 
 ## 7. In-App Notification Bell
 

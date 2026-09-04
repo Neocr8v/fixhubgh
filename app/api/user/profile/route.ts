@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { getCurrentUser, getUserByEmail, getUserById, toSessionUser } from '@/lib/auth';
+import { sendEmail } from '@/lib/mail';
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -52,5 +53,13 @@ export async function PATCH(req: NextRequest) {
 
   const updated = await getUserById(user.id);
   if (!updated) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+  if (passwordHash && updated.email) {
+    void sendEmail({
+      to: updated.email,
+      subject: 'FixHub: Your password was changed',
+      text: `Hello ${updated.name},\n\nYour FixHub password was changed successfully. If you did not make this change, contact an administrator immediately.\n\nFixHub Security`,
+      html: `<p>Hello ${updated.name},</p><p>Your FixHub password was changed successfully.</p><p>If you did not make this change, contact an administrator immediately.</p><p>FixHub Security</p>`,
+    }).catch((error) => console.error('Failed to send password change email:', error));
+  }
   return NextResponse.json({ user: toSessionUser(updated) });
 }

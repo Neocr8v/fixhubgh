@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
 import { db, IssueRow, UpdateRow } from '@/lib/db';
-import { getCurrentUser, getUserById } from '@/lib/auth';
+import { getActiveAdmins, getCurrentUser, getUserById } from '@/lib/auth';
 import { STATUS_ORDER } from '@/lib/issues';
 import { sendEmail } from '@/lib/mail';
 
@@ -132,12 +132,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const student = await getUserById(updated.student_id);
   const technician = updated.technician_id ? await getUserById(updated.technician_id) : undefined;
+  const shouldEmailStudent = technicianId !== undefined || status !== undefined;
   const subject = `FixHub: Update for ${updated.ticket_no}`;
   const changeSummary = messages.join(' ');
   const text = `Hello ${student?.name ?? 'Student'},\n\nThere is an update on your issue ${updated.ticket_no}:\n\n${changeSummary}\n\nTitle: ${updated.title}\nStatus: ${updated.status.replace('_', ' ')}\nRoom: ${updated.room} (${updated.hostel})\n\nVisit the portal to see the latest details.\n\nBest,\nFixHub Team`;
   const html = `<p>Hello ${student?.name ?? 'Student'},</p><p>There is an update on your issue <strong>${updated.ticket_no}</strong>:</p><p>${changeSummary}</p><p><strong>Title:</strong> ${updated.title}<br/><strong>Status:</strong> ${updated.status.replace('_', ' ')}<br/><strong>Room:</strong> ${updated.room} (${updated.hostel})</p><p>Visit the portal to see the latest details.</p><p>Best,<br/>FixHub Team</p>`;
 
-  if (student?.email) {
+  if (student?.email && shouldEmailStudent) {
     void sendEmail({ to: student.email, subject, text, html }).catch((error) => {
       console.error('Failed to send update email to student:', error);
     });
@@ -149,6 +150,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     void sendEmail({ to: technician.email, subject, text: techText, html: techHtml }).catch((error) => {
       console.error('Failed to send update email to technician:', error);
     });
+  }
+
+  if (user.role === 'technician' && status === 'resolved') {
+    const admins = await getActiveAdmins();
+    for (const admin of admins) {
+      if (!admin.email) continue;
+      void sendEmail({
+        to: admin.email,
+        subject: `FixHub: Approval needed for ${updated.ticket_no}`,
+        text: `Hello ${admin.name},\n\n${technician?.name ?? 'A technician'} submitted work for approval on ticket ${updated.ticket_no}.\n\nTitle: ${updated.title}\nRoom: ${updated.room} (${updated.hostel})\n\nReview the ticket in the FixHub admin dashboard.\n\nFixHub Team`,
+        html: `<p>Hello ${admin.name},</p><p>${technician?.name ?? 'A technician'} submitted work for approval on ticket <strong>${updated.ticket_no}</strong>.</p><p><strong>Title:</strong> ${updated.title}<br/><strong>Room:</strong> ${updated.room} (${updated.hostel})</p><p>Review the ticket in the FixHub admin dashboard.</p><p>FixHub Team</p>`,
+      }).catch((error) => console.error('Failed to send approval email to admin:', error));
+    }
   }
 
   return NextResponse.json({ issue: updated });
