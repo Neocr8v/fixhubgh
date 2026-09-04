@@ -7,6 +7,7 @@ interface NotificationItem {
   ticket_no: string;
   title: string;
   room: string;
+  message: string;
   created_at: string;
 }
 
@@ -18,7 +19,8 @@ interface NotificationPayload {
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationPayload>({ total: 0, newIssues: [] });
-  const [lastSeenTotal, setLastSeenTotal] = useState(0);
+  const [seenIds, setSeenIds] = useState<string[]>([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadNotifications = useCallback(async () => {
@@ -28,13 +30,20 @@ export default function NotificationBell() {
       if (!res.ok) return;
       const data = await res.json();
       setNotifications(data);
-      if (open) {
-        setLastSeenTotal(data.total);
+      if (!hasLoaded) {
+        setSeenIds((data.newIssues ?? []).map((issue: NotificationItem) => issue.id));
+        setHasLoaded(true);
+      } else if (open) {
+        setSeenIds((data.newIssues ?? []).map((issue: NotificationItem) => issue.id));
       }
     } finally {
       setLoading(false);
     }
-  }, [open]);
+  }, [hasLoaded, open]);
+
+  const unseenCount = hasLoaded
+    ? notifications.newIssues.filter((issue) => !seenIds.includes(issue.id)).length
+    : 0;
 
   useEffect(() => {
     loadNotifications();
@@ -49,7 +58,7 @@ export default function NotificationBell() {
         onClick={() => setOpen((current) => {
           const nextOpen = !current;
           if (!current) {
-            setLastSeenTotal(notifications.total);
+            setSeenIds(notifications.newIssues.map((issue) => issue.id));
             loadNotifications();
           }
           return nextOpen;
@@ -61,9 +70,9 @@ export default function NotificationBell() {
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6 6 0 1 0-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 1 1-6 0h6Z" />
         </svg>
-        {Math.max(0, notifications.total - lastSeenTotal) > 0 && (
+        {unseenCount > 0 && (
           <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-semibold text-white">
-            {Math.max(0, notifications.total - lastSeenTotal)}
+            {unseenCount}
           </span>
         )}
       </button>
@@ -85,6 +94,7 @@ export default function NotificationBell() {
                   </div>
                   <p className="mt-2 text-sm font-semibold text-slate-900">{issue.title}</p>
                   <p className="mt-1 text-xs text-slate-500">Room {issue.room}</p>
+                  <p className="mt-1 text-xs text-slate-600">{issue.message}</p>
                 </div>
               ))
             )}
