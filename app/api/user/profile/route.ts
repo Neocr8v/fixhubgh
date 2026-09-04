@@ -1,114 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { nanoid } from 'nanoid';
 import { db } from '@/lib/db';
-import { getCurrentUser, getUserByEmail, getUserById } from '@/lib/auth';
-
-function requireAdmin(user: { role: string }) {
-  if (!user || user.role !== 'admin') {
-    throw new Error('ADMIN_REQUIRED');
-  }
-}
+import { getCurrentUser, getUserByEmail, getUserById, toSessionUser } from '@/lib/auth';
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  try {
-    requireAdmin(user);
-  } catch {
-    return NextResponse.json({ error: 'Admin access only.' }, { status: 403 });
-  }
 
-  const users = await db
-    .prepare('SELECT id, name, email, role, hostel, room, specialty, avatar_url, is_active, created_at FROM users ORDER BY role DESC, name ASC')
-    .all();
-  return NextResponse.json({ users });
-}
-
-export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  try {
-    requireAdmin(user);
-  } catch {
-    return NextResponse.json({ error: 'Admin access only.' }, { status: 403 });
-  }
-
-  const body = await req.json().catch(() => null);
-  const name = body?.name?.trim();
-  const email = body?.email?.toLowerCase()?.trim();
-  const role = body?.role;
-  const hostel = body?.hostel?.trim() || null;
-  const room = body?.room?.trim() || null;
-  const specialty = body?.specialty?.trim() || null;
-  const password = body?.password;
-
-  if (!name || !email || !role || !password) {
-    return NextResponse.json({ error: 'Name, email, role and password are required.' }, { status: 400 });
-  }
-  if (!['student', 'technician', 'admin'].includes(role)) {
-    return NextResponse.json({ error: 'Invalid role.' }, { status: 400 });
-  }
-  if (await getUserByEmail(email)) {
-    return NextResponse.json({ error: 'A user with that email already exists.' }, { status: 409 });
-  }
-  if (role !== 'student' && !specialty && role === 'technician') {
-    return NextResponse.json({ error: 'Technicians should have a specialty.' }, { status: 400 });
-  }
-  if (role === 'student' && !hostel) {
-    return NextResponse.json({ error: 'Students must have a hostel assigned.' }, { status: 400 });
-  }
-
-  const id = `u_${nanoid(10)}`;
-  const passwordHash = bcrypt.hashSync(password, 10);
-  await db
-    .prepare(
-      `INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
-    )
-    .run(id, name, email, passwordHash, role, room, hostel, specialty);
-
-  return NextResponse.json({ user: { id, name, email, role, room, specialty, is_active: 1 } });
+  const profile = await getUserById(user.id);
+  if (!profile) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+  return NextResponse.json({ user: toSessionUser(profile) });
 }
 
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
-  try {
-    requireAdmin(user);
-  } catch {
-    return NextResponse.json({ error: 'Admin access only.' }, { status: 403 });
-  }
 
   const body = await req.json().catch(() => null);
-  const id = body?.id;
-  const action = body?.action;
-  if (!id || !action) {
-    return NextResponse.json({ error: 'User ID and action are required.' }, { status: 400 });
+  const name = body?.name?.trim();
+  const email = body?.email?.toLowerCase()?.trim();
+  const room = body?.room?.trim() || null;
+  const hostel = body?.hostel?.trim() || null;
+  const specialty = body?.specialty?.trim() || null;
+  const avatarUrl = body?.avatar_url || null;
+  const phone = body?.phone?.trim() || null;
+  const bio = body?.bio?.trim() || null;
+  const password = body?.password;
+
+  if (!name || !email) {
+    return NextResponse.json({ error: 'Name and email are required.' }, { status: 400 });
+  }
+  if (password && password.length < 6) {
+    return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
   }
 
-  const target = await getUserById(id);
-  if (!target) {
-    return NextResponse.json({ error: 'User not found.' }, { status: 404 });
-  }
-  if (target.role === 'admin' && action === 'deactivate') {
-    return NextResponse.json({ error: 'Cannot deactivate another admin.' }, { status: 403 });
+  const existing = await getUserByEmail(email);
+  if (existing && existing.id !== user.id) {
+    return NextResponse.json({ error: 'An account with that email already exists.' }, { status: 409 });
   }
 
-  if (action === 'toggle_active') {
-    const newStatus = target.is_active === 1 ? 0 : 1;
-    await db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, id);
-    return NextResponse.json({ ok: true, id, is_active: newStatus });
+  const passwordHash = password ? bcrypt.hashSync(password, 10) : null;
+  if (passwordHash) {
+    await db.prepare(
+      `UPDATE users SET name = ?, email = ?, room = ?, hostel = ?, specialty = ?, avatar_url = ?, phone = ?, bio = ?, password_hash = ? WHERE id = ?`
+    ).run(name, email, room, hostel, specialty, avatarUrl, phone, bio, passwordHash, user.id);
+  } else {
+    await db.prepare(
+      `UPDATE users SET name = ?, email = ?, room = ?, hostel = ?, specialty = ?, avatar_url = ?, phone = ?, bio = ? WHERE id = ?`
+    ).run(name, email, room, hostel, specialty, avatarUrl, phone, bio, user.id);
   }
 
-  if (action === 'reset_password') {
-    const tempPassword = body?.password?.trim();
-    if (!tempPassword || tempPassword.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
-    }
-    const passwordHash = bcrypt.hashSync(tempPassword, 10);
-    await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
-    return NextResponse.json({ ok: true });
-  }
-
-  return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
+  const updated = await getUserById(user.id);
+  if (!updated) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+  return NextResponse.json({ user: toSessionUser(updated) });
 }
