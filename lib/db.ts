@@ -102,7 +102,7 @@ async function initializePostgres() {
     ['u_student1', 'Priya Nandan', 'priya.n@student.edu', hash('student123'), 'student', 'B-214', 'Main', null],
     ['u_student2', 'Tom Achebe', 'tom.a@student.edu', hash('student123'), 'student', 'A-108', 'North', null],
   ];
-  for (const user of users) await pool.query('INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', user);
+  for (const user of users) await pool.query('INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (email) DO NOTHING', user);
 }
 
 function postgresReady() {
