@@ -39,12 +39,12 @@ function createSqliteConnection(): SqliteDatabase {
     CREATE TABLE IF NOT EXISTS issues (id TEXT PRIMARY KEY, ticket_no TEXT UNIQUE NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, category TEXT NOT NULL, priority TEXT NOT NULL DEFAULT 'normal', status TEXT NOT NULL DEFAULT 'reported', room TEXT NOT NULL, hostel TEXT NOT NULL DEFAULT 'Main', image_data TEXT, student_id TEXT NOT NULL, technician_id TEXT, duplicate_of TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), resolved_at TEXT);
     CREATE TABLE IF NOT EXISTS updates (id TEXT PRIMARY KEY, issue_id TEXT NOT NULL, actor_id TEXT, message TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
   `);
+  const userCount = Number((conn.prepare('SELECT COUNT(*) AS count FROM users').get() as { count?: number }).count ?? 0);
   const hostelCount = Number((conn.prepare('SELECT COUNT(*) AS count FROM hostels').get() as { count?: number }).count ?? 0);
-  if (hostelCount === 0) {
+  if (userCount === 0 && hostelCount === 0) {
     const insertHostel = conn.prepare('INSERT INTO hostels (id, name) VALUES (?, ?)');
     for (const name of HOSTELS) insertHostel.run(`h_${nanoid(10)}`, name);
   }
-  const userCount = Number((conn.prepare('SELECT COUNT(*) AS count FROM users').get() as { count?: number }).count ?? 0);
   if (userCount === 0) {
     const hash = (password: string) => bcrypt.hashSync(password, 10);
     const insertUser = conn.prepare('INSERT INTO users (id, name, email, password_hash, role, room, hostel, specialty) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
@@ -89,10 +89,14 @@ async function initializePostgres() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;
     ALTER TABLE issues ADD COLUMN IF NOT EXISTS hostel TEXT NOT NULL DEFAULT 'Main';
   `);
-  for (const name of HOSTELS) await pool.query('INSERT INTO hostels (id, name) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING', [`h_${nanoid(10)}`, name]);
-
+  const hostelCount = Number((await pool.query('SELECT COUNT(*) AS count FROM hostels')).rows[0]?.count ?? 0);
   const count = Number((await pool.query('SELECT COUNT(*) AS count FROM users')).rows[0]?.count ?? 0);
   if (count > 0) return;
+  if (hostelCount === 0) {
+    for (const name of HOSTELS) {
+      await pool.query('INSERT INTO hostels (id, name) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING', [`h_${nanoid(10)}`, name]);
+    }
+  }
   const hash = (password: string) => bcrypt.hashSync(password, 10);
   const users = [
     ['u_admin', 'Dara Whitfield', 'admin@hostel.edu', hash('admin123'), 'admin', null, null, null],

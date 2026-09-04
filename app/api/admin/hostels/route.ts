@@ -62,6 +62,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Hostel ID is required.' }, { status: 400 });
   }
 
-  await db.prepare('DELETE FROM hostels WHERE id = ?').run(id);
+  const result = await db.prepare('DELETE FROM hostels WHERE id = ?').run(id);
+  if (result.changes === 0) {
+    return NextResponse.json({ error: 'Hostel not found.' }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 }
