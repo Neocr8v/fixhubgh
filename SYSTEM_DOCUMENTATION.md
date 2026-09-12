@@ -185,11 +185,11 @@ The notification bell refreshes every 30 seconds and also refreshes when opened.
 
 The returned alerts depend on the signed-in role:
 
-- **Administrator:** recent issues with status `review`.
-- **Technician:** recent assignment updates for tickets assigned to that technician.
-- **Student:** recent administrator status updates marking the student's issue as resolved.
+- **Administrator:** recent activity across the system, including new reports and approval requests.
+- **Technician:** recent activity for tickets assigned to that technician.
+- **Student:** recent activity for tickets owned by that student.
 
-The bell displays a count of alerts that arrived since the user last opened it during the current browser session. It does not persist read/unread state in the database.
+The bell refreshes every 30 seconds and displays up to 20 recent updates. Read state is tracked separately for each signed-in user in that user's browser. Notification IDs are used so users do not share or mix read state. Read state is not stored in the database.
 
 ## 8. Data Model
 
@@ -396,8 +396,16 @@ The following protections are implemented:
 - SQL values use parameterized queries rather than string interpolation.
 - Email-disabled logging does not include recipient addresses or email message content.
 - Database and SMTP credentials are read from environment variables.
+
+### Remaining Security Recommendations
+
+These protections are recommended for a larger or more exposed public deployment but are not currently implemented:
+
 - Add rate limiting and account lockout controls for login and registration.
-- Validate uploaded image MIME types, dimensions, and storage size.
+- Validate uploaded image MIME types, dimensions, and storage size more strictly on the server.
+- Add CSRF protection if state-changing endpoints are called from other origins.
+- Use object storage for uploaded images instead of storing large base64 values in database rows.
+- Restrict database credentials to the minimum required permissions.
 
 
 ## 13. Operational Requirements
@@ -436,12 +444,27 @@ The API returns JSON errors with appropriate HTTP status codes:
 
 Email failures are logged and do not roll back issue changes. This keeps maintenance reporting available even when an email provider is temporarily unavailable.
 
-## 15. Future Enhancements
+## 15. Flow Chart Placeholder
 
-- Send direct email notifications to administrators.
-- Store notification read state in the database.
+Insert the final system flow chart here. It should cover:
+
+1. Student registration or login.
+2. Hostel list retrieval.
+3. Issue submission.
+4. Priority and duplicate detection.
+5. Database persistence.
+6. Administrator review and assignment.
+7. Technician work and status updates.
+8. Email and in-app notifications.
+9. Administrator approval.
+10. Final resolution and student notification.
+
+## 16. Future Enhancements
+
+- Store notification read state in the database for cross-device synchronization.
 - Replace base64 image storage with object storage such as S3 or R2.
 - Add database migrations with version tracking instead of startup schema changes.
 - Generate ticket numbers with a database sequence or transaction-safe counter.
 - Add rate limiting to authentication and issue submission endpoints.
+- Add stricter server-side image MIME and dimension validation.
 - Add automated tests for role permissions, email events, and Postgres schema upgrades.

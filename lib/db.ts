@@ -6,7 +6,12 @@ import { nanoid } from 'nanoid';
 import { HOSTELS } from './constants';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
-const POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_URL || '';
+const POSTGRES_URL =
+  process.env.POSTGRES_URL ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL_NON_POOLING ||
+  '';
 
 type SqliteStatement = { all: (...params: unknown[]) => unknown[]; get: (...params: unknown[]) => unknown; run: (...params: unknown[]) => unknown };
 type SqliteDatabase = { exec: (sql: string) => void; prepare: (sql: string) => SqliteStatement };
@@ -28,6 +33,10 @@ export interface DbStatement {
 export interface Database { prepare: (sql: string) => DbStatement }
 
 function createSqliteConnection(): SqliteDatabase {
+  const isBuild = process.env.NEXT_PHASE === 'phase-production-build';
+  if (process.env.NODE_ENV === 'production' && !isBuild) {
+    throw new Error('A PostgreSQL connection string is required in production. Set POSTGRES_URL or DATABASE_URL.');
+  }
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   const loadSqlite = eval('require') as (name: string) => { DatabaseSync: new (file: string) => SqliteDatabase };
   const sqlite = loadSqlite('node:sqlite');
